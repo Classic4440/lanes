@@ -124,12 +124,12 @@ export class Controller {
 
   /* -------------------------------- startup ------------------------------ */
 
-  async init(): Promise<void> {
+  async init(options: { restoreLastProject?: boolean } = {}): Promise<void> {
     if (this.state.ready) return;
     try {
       await this.refreshProjects();
       const last = db.getLastProjectId();
-      if (last) await this.openProject(last, true);
+      if (last && options.restoreLastProject !== false) await this.openProject(last, true);
     } catch (err) {
       console.error(err);
       this.set({ error: err instanceof Error ? err.message : String(err) });

@@ -24,18 +24,18 @@ export function StudioApp() {
   const { time, playing } = usePlayhead(controller);
   const [dialog, setDialog] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [waitingForNoteLab, setWaitingForNoteLab] = useState(false);
   const dragDepth = useRef(0);
   const midiImportStarted = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     let messageHandler: ((event: MessageEvent) => void) | null = null;
-    void (async () => {
-      await controller.init();
-      if (cancelled || midiImportStarted.current) return;
-      const importMidiParam = new URLSearchParams(window.location.search).get("importMidi");
-      if (importMidiParam !== "pending") return;
+    const importMidiPending = new URLSearchParams(window.location.search).get("importMidi") === "pending";
+    if (importMidiPending) setWaitingForNoteLab(true);
+    const initialization = controller.init({ restoreLastProject: !importMidiPending });
 
+    if (importMidiPending && !midiImportStarted.current) {
       let dataInFlight = false;
       const importPayload = async (encodedPayload: string): Promise<boolean> => {
         try {
@@ -55,6 +55,8 @@ export function StudioApp() {
             throw new Error("Invalid NoteLab MIDI payload");
           }
 
+          await initialization;
+          if (cancelled) return false;
           if (controller.store.getState().project === null) await controller.newBlankProject();
           controller.store.commit((project) => ops.setBpm(project, payload.bpm));
           const activeProject = controller.store.getState().project;
@@ -103,6 +105,8 @@ export function StudioApp() {
           }
 
           controller.store.commit(() => project);
+          midiImportStarted.current = true;
+          setWaitingForNoteLab(false);
           window.history.replaceState({}, "", "/");
           return true;
         } catch (error) {
@@ -128,12 +132,11 @@ export function StudioApp() {
         }
         dataInFlight = true;
         void importPayload(message.payload).then((success) => {
-          if (success) midiImportStarted.current = true;
-          else dataInFlight = false;
+          if (!success) dataInFlight = false;
         });
       };
       window.addEventListener("message", messageHandler);
-    })();
+    }
     return () => {
       cancelled = true;
       if (messageHandler) window.removeEventListener("message", messageHandler);
@@ -209,6 +212,14 @@ export function StudioApp() {
       <ProjectsDialog controller={controller} open={dialog} onClose={() => setDialog(false)} />
     </div>
   );
+
+  if (waitingForNoteLab) {
+    return (
+      <div className="flex min-h-[calc(100dvh-var(--shell-h))] items-center justify-center bg-background text-sm text-muted-foreground" role="status" aria-live="polite">
+        Waiting for NoteLab connection…
+      </div>
+    );
+  }
 
   if (!cs.ready) {
     return (
