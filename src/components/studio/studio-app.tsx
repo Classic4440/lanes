@@ -37,15 +37,20 @@ export function StudioApp() {
       if (importMidiParam !== "pending") return;
 
       let dataInFlight = false;
-      const importPayload = async (encodedPayload: unknown): Promise<boolean> => {
+      const importPayload = async (encodedPayload: string): Promise<boolean> => {
         try {
-          if (typeof encodedPayload !== "string") throw new Error("Invalid NoteLab MIDI payload");
           const json = LZString.decompressFromEncodedURIComponent(encodedPayload);
           if (json === null) throw new Error("Invalid compressed NoteLab MIDI payload");
-          const payload = JSON.parse(json) as {
+          let payload: {
             bpm: number;
             tracks: Partial<Record<"melody" | "chords" | "bass" | "drums", { s: number; l: number; p: number; v: number }[]>>;
           };
+          try {
+            payload = JSON.parse(json) as typeof payload;
+          } catch (error) {
+            console.error("NoteLab sent invalid MIDI JSON:", error);
+            return false;
+          }
           if (!Number.isFinite(payload.bpm) || payload.bpm <= 0 || !payload.tracks || typeof payload.tracks !== "object") {
             throw new Error("Invalid NoteLab MIDI payload");
           }
@@ -107,6 +112,7 @@ export function StudioApp() {
       };
 
       messageHandler = (event) => {
+        if (event.origin !== "https://notelab2.uwon.workers.dev") return;
         if (!event.data || typeof event.data !== "object") return;
         const message = event.data as { type?: unknown; payload?: unknown };
         if (message.type === "NOTELAB_HELLO") {
@@ -115,6 +121,10 @@ export function StudioApp() {
           return;
         }
         if (message.type !== "NOTELAB_DATA" || dataInFlight) return;
+        if (typeof message.payload !== "string" || message.payload.length === 0) {
+          console.error("NoteLab sent an empty or invalid MIDI payload");
+          return;
+        }
         dataInFlight = true;
         void importPayload(message.payload).then((success) => {
           if (success) midiImportStarted.current = true;
