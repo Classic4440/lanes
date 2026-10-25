@@ -29,82 +29,103 @@ export function StudioApp() {
 
   useEffect(() => {
     let cancelled = false;
+    let messageHandler: ((event: MessageEvent) => void) | null = null;
     void (async () => {
       await controller.init();
       if (cancelled || midiImportStarted.current) return;
       const importMidiParam = new URLSearchParams(window.location.search).get("importMidi");
-      if (importMidiParam !== "true") return;
-      midiImportStarted.current = true;
+      if (importMidiParam !== "pending") return;
 
-      try {
-        const data = localStorage.getItem("notelab_to_lanes");
-        if (data === null) throw new Error("No NoteLab MIDI data found in local storage");
-        const json = LZString.decompressFromEncodedURIComponent(data);
-        if (json === null) throw new Error("Invalid compressed NoteLab MIDI payload");
-        const payload = JSON.parse(json) as {
-          bpm: number;
-          tracks: Partial<Record<"melody" | "chords" | "bass" | "drums", { s: number; l: number; p: number; v: number }[]>>;
-        };
-        if (!Number.isFinite(payload.bpm) || payload.bpm <= 0 || !payload.tracks || typeof payload.tracks !== "object") {
-          throw new Error("Invalid NoteLab MIDI payload");
-        }
-
-        if (controller.store.getState().project === null) await controller.newBlankProject();
-        controller.store.commit((project) => ops.setBpm(project, payload.bpm));
-        const activeProject = controller.store.getState().project;
-        if (!activeProject) throw new Error("Could not open a project for NoteLab MIDI import");
-        let project = activeProject;
-        const parts = [
-          { key: "melody", name: "Melody", synth: "keys" as const, color: "var(--lane-vocals)" },
-          { key: "chords", name: "Chords", synth: "keys" as const, color: "var(--lane-chords)" },
-          { key: "bass", name: "Bass", synth: "bass" as const, color: "var(--lane-bass)" },
-          { key: "drums", name: "Drums", synth: "drums" as const, color: "var(--lane-kick)" },
-        ] as const;
-        const secondsPerBar = 240 / payload.bpm;
-
-        for (const part of parts) {
-          const notes = payload.tracks[part.key];
-          if (!Array.isArray(notes)) continue;
-          const added = ops.addTrack(project, { name: part.name, kind: "midi", color: part.color });
-          const trackId = added.ids[0]!;
-          project = {
-            ...added.project,
-            tracks: added.project.tracks.map((track) =>
-              track.id !== trackId
-                ? track
-                : {
-                    ...track,
-                    synth: part.synth,
-                    clips: notes
-                      .filter((note) =>
-                        Number.isFinite(note.s) && note.s >= 0 && Number.isFinite(note.l) && note.l > 0 &&
-                        Number.isFinite(note.p) && note.p >= 0 && note.p <= 127 &&
-                        Number.isFinite(note.v) && note.v >= 0 && note.v <= 127,
-                      )
-                      .map((note) => ({
-                        kind: "event" as const,
-                        id: newId("clip"),
-                        trackId,
-                        name: part.name,
-                        start: (note.s / 16) * secondsPerBar,
-                        duration: (note.l / 16) * secondsPerBar,
-                        pitch: note.p,
-                        velocity: note.v / 127,
-                      })),
-                  },
-            ),
+      let dataInFlight = false;
+      const importPayload = async (encodedPayload: unknown): Promise<boolean> => {
+        try {
+          if (typeof encodedPayload !== "string") throw new Error("Invalid NoteLab MIDI payload");
+          const json = LZString.decompressFromEncodedURIComponent(encodedPayload);
+          if (json === null) throw new Error("Invalid compressed NoteLab MIDI payload");
+          const payload = JSON.parse(json) as {
+            bpm: number;
+            tracks: Partial<Record<"melody" | "chords" | "bass" | "drums", { s: number; l: number; p: number; v: number }[]>>;
           };
-        }
+          if (!Number.isFinite(payload.bpm) || payload.bpm <= 0 || !payload.tracks || typeof payload.tracks !== "object") {
+            throw new Error("Invalid NoteLab MIDI payload");
+          }
 
-        controller.store.commit(() => project);
-        localStorage.removeItem("notelab_to_lanes");
-        window.history.replaceState({}, "", "/");
-      } catch (error) {
-        console.error("Could not import NoteLab MIDI:", error);
-      }
+          if (controller.store.getState().project === null) await controller.newBlankProject();
+          controller.store.commit((project) => ops.setBpm(project, payload.bpm));
+          const activeProject = controller.store.getState().project;
+          if (!activeProject) throw new Error("Could not open a project for NoteLab MIDI import");
+          let project = activeProject;
+          const parts = [
+            { key: "melody", name: "Melody", synth: "keys" as const, color: "var(--lane-vocals)" },
+            { key: "chords", name: "Chords", synth: "keys" as const, color: "var(--lane-chords)" },
+            { key: "bass", name: "Bass", synth: "bass" as const, color: "var(--lane-bass)" },
+            { key: "drums", name: "Drums", synth: "drums" as const, color: "var(--lane-kick)" },
+          ] as const;
+          const secondsPerBar = 240 / payload.bpm;
+
+          for (const part of parts) {
+            const notes = payload.tracks[part.key];
+            if (!Array.isArray(notes)) continue;
+            const added = ops.addTrack(project, { name: part.name, kind: "midi", color: part.color });
+            const trackId = added.ids[0]!;
+            project = {
+              ...added.project,
+              tracks: added.project.tracks.map((track) =>
+                track.id !== trackId
+                  ? track
+                  : {
+                      ...track,
+                      synth: part.synth,
+                      clips: notes
+                        .filter((note) =>
+                          Number.isFinite(note.s) && note.s >= 0 && Number.isFinite(note.l) && note.l > 0 &&
+                          Number.isFinite(note.p) && note.p >= 0 && note.p <= 127 &&
+                          Number.isFinite(note.v) && note.v >= 0 && note.v <= 127,
+                        )
+                        .map((note) => ({
+                          kind: "event" as const,
+                          id: newId("clip"),
+                          trackId,
+                          name: part.name,
+                          start: (note.s / 16) * secondsPerBar,
+                          duration: (note.l / 16) * secondsPerBar,
+                          pitch: note.p,
+                          velocity: note.v / 127,
+                        })),
+                    },
+              ),
+            };
+          }
+
+          controller.store.commit(() => project);
+          window.history.replaceState({}, "", "/");
+          return true;
+        } catch (error) {
+          console.error("Could not import NoteLab MIDI:", error);
+          return false;
+        }
+      };
+
+      messageHandler = (event) => {
+        if (!event.data || typeof event.data !== "object") return;
+        const message = event.data as { type?: unknown; payload?: unknown };
+        if (message.type === "NOTELAB_HELLO") {
+          const source = event.source as WindowProxy | null;
+          source?.postMessage({ type: "LANES_READY" }, "*");
+          return;
+        }
+        if (message.type !== "NOTELAB_DATA" || dataInFlight) return;
+        dataInFlight = true;
+        void importPayload(message.payload).then((success) => {
+          if (success) midiImportStarted.current = true;
+          else dataInFlight = false;
+        });
+      };
+      window.addEventListener("message", messageHandler);
     })();
     return () => {
       cancelled = true;
+      if (messageHandler) window.removeEventListener("message", messageHandler);
     };
   }, [controller]);
 
