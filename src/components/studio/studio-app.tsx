@@ -33,11 +33,13 @@ export function StudioApp() {
       await controller.init();
       if (cancelled || midiImportStarted.current) return;
       const importMidiParam = new URLSearchParams(window.location.search).get("importMidi");
-      if (importMidiParam === null) return;
+      if (importMidiParam !== "true") return;
       midiImportStarted.current = true;
 
       try {
-        const json = LZString.decompressFromEncodedURIComponent(importMidiParam);
+        const data = localStorage.getItem("notelab_to_lanes");
+        if (data === null) throw new Error("No NoteLab MIDI data found in local storage");
+        const json = LZString.decompressFromEncodedURIComponent(data);
         if (json === null) throw new Error("Invalid compressed NoteLab MIDI payload");
         const payload = JSON.parse(json) as {
           bpm: number;
@@ -95,10 +97,10 @@ export function StudioApp() {
         }
 
         controller.store.commit(() => project);
+        localStorage.removeItem("notelab_to_lanes");
+        window.history.replaceState({}, "", "/");
       } catch (error) {
         console.error("Could not import NoteLab MIDI:", error);
-      } finally {
-        window.history.replaceState({}, "", "/");
       }
     })();
     return () => {
