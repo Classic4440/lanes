@@ -1,15 +1,16 @@
 import { i as __toESM } from "../../_runtime.mjs";
-import { u as require_react } from "../@floating-ui/react-dom+[...].mjs";
-import { a as createContextScope, o as useComposedRefs, s as require_jsx_runtime, t as createCollection } from "./react-collection+[...].mjs";
-import { t as composeEventHandlers } from "../radix-ui__primitive.mjs";
-import { r as Primitive } from "./react-dismissable-layer+[...].mjs";
-import { i as useLayoutEffect2, r as useSize } from "./react-popper+[...].mjs";
+import { a as useComposedRefs, n as createContextScope, o as require_jsx_runtime, s as require_react, t as createCollection } from "./react-collection+[...].mjs";
+import { t as Primitive } from "./react-primitive+[...].mjs";
 import { t as clamp } from "../radix-ui__number.mjs";
+import { t as composeEventHandlers } from "../radix-ui__primitive.mjs";
 import { t as useDirection } from "../radix-ui__react-direction.mjs";
-//#region node_modules/@radix-ui/react-use-effect-event/dist/index.mjs
+//#region node_modules/@radix-ui/react-use-layout-effect/dist/index.mjs
 var import_react = /* @__PURE__ */ __toESM(require_react(), 1);
-var __defProp$3 = Object.defineProperty;
-var __name$3 = (target, value) => __defProp$3(target, "name", {
+var useLayoutEffect2 = globalThis?.document ? import_react.useLayoutEffect : () => {};
+//#endregion
+//#region node_modules/@radix-ui/react-use-effect-event/dist/index.mjs
+var __defProp$4 = Object.defineProperty;
+var __name$4 = (target, value) => __defProp$4(target, "name", {
 	value,
 	configurable: true
 });
@@ -28,16 +29,16 @@ function useEffectEvent(callback) {
 	});
 	return import_react.useMemo(() => ((...args) => ref.current?.(...args)), []);
 }
-__name$3(useEffectEvent, "useEffectEvent");
+__name$4(useEffectEvent, "useEffectEvent");
 //#endregion
 //#region node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs
-var __defProp$2 = Object.defineProperty;
-var __name$2 = (target, value) => __defProp$2(target, "name", {
+var __defProp$3 = Object.defineProperty;
+var __name$3 = (target, value) => __defProp$3(target, "name", {
 	value,
 	configurable: true
 });
 var useInsertionEffect = import_react[" useInsertionEffect ".trim().toString()] || useLayoutEffect2;
-function useControllableState({ prop, defaultProp, onChange = /* @__PURE__ */ __name$2(() => {}, "onChange"), caller }) {
+function useControllableState({ prop, defaultProp, onChange = /* @__PURE__ */ __name$3(() => {}, "onChange"), caller }) {
 	const [uncontrolledProp, setUncontrolledProp, onChangeRef] = useUncontrolledState({
 		defaultProp,
 		onChange
@@ -55,7 +56,7 @@ function useControllableState({ prop, defaultProp, onChange = /* @__PURE__ */ __
 		onChangeRef
 	])];
 }
-__name$2(useControllableState, "useControllableState");
+__name$3(useControllableState, "useControllableState");
 function useUncontrolledState({ defaultProp, onChange }) {
 	const [value, setValue] = import_react.useState(defaultProp);
 	const prevValueRef = import_react.useRef(value);
@@ -75,11 +76,11 @@ function useUncontrolledState({ defaultProp, onChange }) {
 		onChangeRef
 	];
 }
-__name$2(useUncontrolledState, "useUncontrolledState");
+__name$3(useUncontrolledState, "useUncontrolledState");
 function isFunction$1(value) {
 	return typeof value === "function";
 }
-__name$2(isFunction$1, "isFunction");
+__name$3(isFunction$1, "isFunction");
 var SYNC_STATE = Symbol("RADIX:SYNC_STATE");
 function useControllableStateReducer(reducer, userArgs, initialArg, init) {
 	const { prop: controlledState, defaultProp, onChange: onChangeProp, caller } = userArgs;
@@ -130,11 +131,11 @@ function useControllableStateReducer(reducer, userArgs, initialArg, init) {
 	]);
 	return [state, dispatch];
 }
-__name$2(useControllableStateReducer, "useControllableStateReducer");
+__name$3(useControllableStateReducer, "useControllableStateReducer");
 //#endregion
 //#region node_modules/@radix-ui/react-use-previous/dist/index.mjs
-var __defProp$1 = Object.defineProperty;
-var __name$1 = (target, value) => __defProp$1(target, "name", {
+var __defProp$2 = Object.defineProperty;
+var __name$2 = (target, value) => __defProp$2(target, "name", {
 	value,
 	configurable: true
 });
@@ -151,7 +152,49 @@ function usePrevious(value) {
 		return ref.current.previous;
 	}, [value]);
 }
-__name$1(usePrevious, "usePrevious");
+__name$2(usePrevious, "usePrevious");
+//#endregion
+//#region node_modules/@radix-ui/react-use-size/dist/index.mjs
+var __defProp$1 = Object.defineProperty;
+var __name$1 = (target, value) => __defProp$1(target, "name", {
+	value,
+	configurable: true
+});
+function useSize(element) {
+	const [size, setSize] = import_react.useState(void 0);
+	useLayoutEffect2(() => {
+		if (element) {
+			setSize({
+				width: element.offsetWidth,
+				height: element.offsetHeight
+			});
+			const resizeObserver = new ResizeObserver((entries) => {
+				if (!Array.isArray(entries)) return;
+				if (!entries.length) return;
+				const entry = entries[0];
+				let width;
+				let height;
+				if ("borderBoxSize" in entry) {
+					const borderSizeEntry = entry["borderBoxSize"];
+					const borderSize = Array.isArray(borderSizeEntry) ? borderSizeEntry[0] : borderSizeEntry;
+					width = borderSize["inlineSize"];
+					height = borderSize["blockSize"];
+				} else {
+					width = element.offsetWidth;
+					height = element.offsetHeight;
+				}
+				setSize({
+					width,
+					height
+				});
+			});
+			resizeObserver.observe(element, { box: "border-box" });
+			return () => resizeObserver.unobserve(element);
+		} else setSize(void 0);
+	}, [element]);
+	return size;
+}
+__name$1(useSize, "useSize");
 //#endregion
 //#region node_modules/@radix-ui/react-slider/dist/index.mjs
 var import_jsx_runtime = require_jsx_runtime();
