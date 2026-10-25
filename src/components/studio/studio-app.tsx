@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { getController } from "@/lib/daw/controller";
+import { blankProject } from "@/lib/daw/factory";
+import { newId } from "@/lib/daw/ids";
 import * as ops from "@/lib/daw/ops";
 import { projectEnd } from "@/lib/daw/timeline-math";
 import { takeForStudio } from "@/lib/editor/handoff";
@@ -23,9 +25,81 @@ export function StudioApp() {
   const [dialog, setDialog] = useState(false);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
+  const midiImportStarted = useRef(false);
 
   useEffect(() => {
-    void controller.init();
+    let cancelled = false;
+    void (async () => {
+      await controller.init();
+      if (cancelled || midiImportStarted.current) return;
+      const importMidiParam = new URLSearchParams(window.location.search).get("importMidi");
+      if (importMidiParam === null) return;
+      midiImportStarted.current = true;
+      window.history.replaceState({}, "", "/");
+
+      try {
+        const decoded = JSON.parse(decodeURIComponent(atob(importMidiParam))) as {
+          bpm: number;
+          tracks: Partial<Record<"melody" | "chords" | "bass" | "drums", { s: number; l: number; p: number; v: number }[]>>;
+        };
+        if (!Number.isFinite(decoded.bpm) || decoded.bpm <= 0 || !decoded.tracks || typeof decoded.tracks !== "object") {
+          throw new Error("Invalid NoteLab MIDI payload");
+        }
+
+        const hadProject = controller.store.getState().project !== null;
+        let project = controller.store.getState().project ?? blankProject("NoteLab Import");
+        project = ops.setBpm(project, decoded.bpm);
+        const parts = [
+          { key: "melody", name: "Melody", synth: "keys" as const, color: "var(--lane-vocals)" },
+          { key: "chords", name: "Chords", synth: "keys" as const, color: "var(--lane-chords)" },
+          { key: "bass", name: "Bass", synth: "bass" as const, color: "var(--lane-bass)" },
+          { key: "drums", name: "Drums", synth: "drums" as const, color: "var(--lane-kick)" },
+        ] as const;
+        const secondsPerBar = 240 / decoded.bpm;
+
+        for (const part of parts) {
+          const notes = decoded.tracks[part.key];
+          if (!Array.isArray(notes)) continue;
+          const added = ops.addTrack(project, { name: part.name, kind: "midi", color: part.color });
+          const trackId = added.ids[0]!;
+          project = {
+            ...added.project,
+            tracks: added.project.tracks.map((track) =>
+              track.id !== trackId
+                ? track
+                : {
+                    ...track,
+                    synth: part.synth,
+                    clips: notes
+                      .filter((note) =>
+                        Number.isFinite(note.s) && note.s >= 0 && Number.isFinite(note.l) && note.l > 0 &&
+                        Number.isFinite(note.p) && note.p >= 0 && note.p <= 127 &&
+                        Number.isFinite(note.v) && note.v >= 0 && note.v <= 127,
+                      )
+                      .map((note) => ({
+                        kind: "event" as const,
+                        id: newId("clip"),
+                        trackId,
+                        name: part.name,
+                        start: (note.s / 16) * secondsPerBar,
+                        duration: (note.l / 16) * secondsPerBar,
+                        pitch: note.p,
+                        velocity: note.v / 127,
+                      })),
+                  },
+            ),
+          };
+        }
+
+        if (hadProject) controller.store.commit(() => project);
+        else controller.store.open(project, { dirty: true });
+      } catch (error) {
+        console.error("Could not import NoteLab MIDI:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [controller]);
 
   // Leaving for the editor unmounts the studio; don't leave it playing underneath.
