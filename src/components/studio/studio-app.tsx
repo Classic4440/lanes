@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { getController } from "@/lib/daw/controller";
-import { blankProject } from "@/lib/daw/factory";
 import { newId } from "@/lib/daw/ids";
 import * as ops from "@/lib/daw/ops";
 import { projectEnd } from "@/lib/daw/timeline-math";
@@ -36,7 +35,6 @@ export function StudioApp() {
       const importMidiParam = new URLSearchParams(window.location.search).get("importMidi");
       if (importMidiParam === null) return;
       midiImportStarted.current = true;
-      window.history.replaceState({}, "", "/");
 
       try {
         const json = LZString.decompressFromEncodedURIComponent(importMidiParam);
@@ -49,9 +47,11 @@ export function StudioApp() {
           throw new Error("Invalid NoteLab MIDI payload");
         }
 
-        const hadProject = controller.store.getState().project !== null;
-        let project = controller.store.getState().project ?? blankProject("NoteLab Import");
-        project = ops.setBpm(project, payload.bpm);
+        if (controller.store.getState().project === null) await controller.newBlankProject();
+        controller.store.commit((project) => ops.setBpm(project, payload.bpm));
+        const activeProject = controller.store.getState().project;
+        if (!activeProject) throw new Error("Could not open a project for NoteLab MIDI import");
+        let project = activeProject;
         const parts = [
           { key: "melody", name: "Melody", synth: "keys" as const, color: "var(--lane-vocals)" },
           { key: "chords", name: "Chords", synth: "keys" as const, color: "var(--lane-chords)" },
@@ -94,10 +94,11 @@ export function StudioApp() {
           };
         }
 
-        if (hadProject) controller.store.commit(() => project);
-        else controller.store.open(project, { dirty: true });
+        controller.store.commit(() => project);
       } catch (error) {
         console.error("Could not import NoteLab MIDI:", error);
+      } finally {
+        window.history.replaceState({}, "", "/");
       }
     })();
     return () => {
