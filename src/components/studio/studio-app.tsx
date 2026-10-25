@@ -116,8 +116,9 @@ export function StudioApp() {
         if (!event.data || typeof event.data !== "object") return;
         const message = event.data as { type?: unknown; payload?: unknown };
         if (message.type === "NOTELAB_HELLO") {
-          const source = event.source as WindowProxy | null;
-          source?.postMessage({ type: "LANES_READY" }, "*");
+          if (event.source) {
+            (event.source as Window).postMessage({ type: "LANES_READY" }, "https://notelab2.uwon.workers.dev");
+          }
           return;
         }
         if (message.type !== "NOTELAB_DATA" || dataInFlight) return;
