@@ -1,4 +1,5 @@
 import { AlertTriangle, X } from "lucide-react";
+import LZString from "lz-string";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -38,27 +39,29 @@ export function StudioApp() {
       window.history.replaceState({}, "", "/");
 
       try {
-        const decoded = JSON.parse(decodeURIComponent(atob(importMidiParam))) as {
+        const json = LZString.decompressFromEncodedURIComponent(importMidiParam);
+        if (json === null) throw new Error("Invalid compressed NoteLab MIDI payload");
+        const payload = JSON.parse(json) as {
           bpm: number;
           tracks: Partial<Record<"melody" | "chords" | "bass" | "drums", { s: number; l: number; p: number; v: number }[]>>;
         };
-        if (!Number.isFinite(decoded.bpm) || decoded.bpm <= 0 || !decoded.tracks || typeof decoded.tracks !== "object") {
+        if (!Number.isFinite(payload.bpm) || payload.bpm <= 0 || !payload.tracks || typeof payload.tracks !== "object") {
           throw new Error("Invalid NoteLab MIDI payload");
         }
 
         const hadProject = controller.store.getState().project !== null;
         let project = controller.store.getState().project ?? blankProject("NoteLab Import");
-        project = ops.setBpm(project, decoded.bpm);
+        project = ops.setBpm(project, payload.bpm);
         const parts = [
           { key: "melody", name: "Melody", synth: "keys" as const, color: "var(--lane-vocals)" },
           { key: "chords", name: "Chords", synth: "keys" as const, color: "var(--lane-chords)" },
           { key: "bass", name: "Bass", synth: "bass" as const, color: "var(--lane-bass)" },
           { key: "drums", name: "Drums", synth: "drums" as const, color: "var(--lane-kick)" },
         ] as const;
-        const secondsPerBar = 240 / decoded.bpm;
+        const secondsPerBar = 240 / payload.bpm;
 
         for (const part of parts) {
-          const notes = decoded.tracks[part.key];
+          const notes = payload.tracks[part.key];
           if (!Array.isArray(notes)) continue;
           const added = ops.addTrack(project, { name: part.name, kind: "midi", color: part.color });
           const trackId = added.ids[0]!;
