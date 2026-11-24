@@ -17,6 +17,32 @@ import { Timeline } from "./timeline";
 import { Transport } from "./transport";
 import { useControllerState, usePlayhead, useProjectState } from "./use-studio";
 
+/** Origins allowed to complete the NoteLab → Lanes postMessage handshake. */
+const NOTELAB_ORIGINS = new Set([
+  "https://notelab2.uwon.workers.dev",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+]);
+
+function isAllowedNoteLabOrigin(origin: string): boolean {
+  if (NOTELAB_ORIGINS.has(origin)) return true;
+  // Allow any *.uwon.workers.dev worker that looks like a NoteLab deploy.
+  try {
+    const url = new URL(origin);
+    return (
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".uwon.workers.dev") &&
+      url.hostname.includes("notelab")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function StudioApp() {
   const controller = getController();
   const cs = useControllerState(controller);
@@ -116,12 +142,12 @@ export function StudioApp() {
       };
 
       messageHandler = (event) => {
-        if (event.origin !== "https://notelab2.uwon.workers.dev") return;
+        if (!isAllowedNoteLabOrigin(event.origin)) return;
         if (!event.data || typeof event.data !== "object") return;
         const message = event.data as { type?: unknown; payload?: unknown };
         if (message.type === "NOTELAB_HELLO") {
           if (event.source) {
-            (event.source as Window).postMessage({ type: "LANES_READY" }, "https://notelab2.uwon.workers.dev");
+            (event.source as Window).postMessage({ type: "LANES_READY" }, event.origin);
           }
           return;
         }
