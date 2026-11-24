@@ -3,22 +3,26 @@
 **Local-first audio studio + deep analysis**  
 (formerly `cam-audio-anylizer`)
 
-Part of the **CAM collective** alongside camleinad (public artist site) and camOS (private owner desk).
+Part of the **CAM ecosystem** (4 repos).
 
 - **Live / deploy:** Cloudflare Workers (Worker name pinned to `cam-audio-anylizer`)
 - **Repo:** https://github.com/Classic4440/lanes
 
 ---
 
-## Role in the collective
+## Role in the ecosystem
 
-| Surface | Role |
-|---------|------|
-| **lanes** (this) | Create, analyse, arrange, stem-separate, export MIDI / mix |
-| **camOS** | Private desk — manage releases, tasks, brand, vault |
-| **camleinad** | Public face — present music, journal, streaming links |
+| Repo | Role |
+|------|------|
+| [NoteLab2](https://github.com/Classic4440/NoteLab2) | Creation + learning workspace (FL Studio focused) |
+| **lanes** (this) | Deep analysis, stems, MIDI, multi-track arrangement |
+| [camleinad](https://github.com/Classic4440/camleinad) | Public artist website |
+| [camOS](https://github.com/Classic4440/camOS) | Private owner desk |
 
-Full map, data flows and priorities → **[docs/SYSTEM_MAP.md](docs/SYSTEM_MAP.md)**
+Canonical system map (data flows, status, priorities):
+→ https://github.com/Classic4440/NoteLab2/blob/main/docs/SYSTEM_MAP.md
+
+Local mirror → **[docs/SYSTEM_MAP.md](docs/SYSTEM_MAP.md)**
 
 ---
 
@@ -75,6 +79,6 @@ node --experimental-strip-types scripts/analyze-file.ts song.mp3
 
 ## Changelog (2026-11-24)
 
-- Added `docs/SYSTEM_MAP.md` — collective architecture and integration priorities
-- Expanded this README to show lanes’ place in the CAM ecosystem and link the System Map
-- Confirmed no committed `.env` in this repo
+- Corrected SYSTEM_MAP to the real 4-repo set (NoteLab2, lanes, camleinad, camOS)
+- Explicitly marked `camleinad-public` as archived / wrong target
+- Pointed to canonical System Map in NoteLab2
