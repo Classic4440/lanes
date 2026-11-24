@@ -1,48 +1,38 @@
-# CAM Collective — System Map
+# CAM Ecosystem — System Map
 
-**Last updated:** 2026-11-24
+**Last updated:** 2026-11-24  
+**Canonical copy lives in NoteLab2:** https://github.com/Classic4440/NoteLab2/blob/main/docs/SYSTEM_MAP.md
 
-Single source of truth for how the main CAM surfaces relate.
+This is a mirror for convenience inside the lanes repo.
 
-## The three surfaces
+## The Four Repos
 
-| Repo | Visibility | Role | Primary user |
-|------|------------|------|--------------|
-| **camleinad-public** | Public (currently archived) | Artist website — music, releases, journal, player, socials | Fans + public |
-| **lanes** (this repo, formerly cam-audio-anylizer) | Public tool | Local-first studio: deep analysis (BPM / key / chords / stems / MIDI), timeline arrangement, AudioMass editor | Cam / producers |
-| **camOS** | Private (Owner Lock) | Personal operating desk — tasks, ledger, vault, lab, brand shop, music workspace, codes | Cam only |
+| Repo | Visibility | Role |
+|------|------------|------|
+| **NoteLab2** | Private | Creation + Learning workspace (FL Studio focused) |
+| **lanes** (this) | Public | Deep audio analysis + editable multi-track studio |
+| **camleinad** | Private | Public artist website & brand presence |
+| **camOS** | Public | Private owner desk (tasks, ledger, vault, lab, brand, music) |
 
-## Intended workflow
+> `camleinad-public` is archived. **Do not use it.** Active public-site work is in the private `camleinad` repo.
 
-1. **Create & analyse** in **lanes** (or a future NoteLab-style creation workspace).
-2. **Manage** releases, tasks, brand assets and vault inside **camOS**.
-3. **Publish / present** on **camleinad** (artwork, audio, streaming links, journal).
+## Intended Flow
 
-## Current integration reality
+```
+NoteLab2 (create / learn / generate)
+    ↓  "Send to Lanes"
+lanes (analyse / edit / stems / MIDI / bounce)
+    ↓  hand-off
+camOS Music workspace (manage release)
+    ↓  publish
+camleinad (public artist site)
+```
 
-- Shared Supabase + Cloudflare configuration exists across the ecosystem.
-- lanes is strongly local-first (IndexedDB projects, no forced upload).
-- camOS Music workspace is the natural bridge between private work and the public site.
-- camleinad-public is currently **archived** → any live public site work needs either un-archiving or a new public repo.
+## Next Priorities
 
-## Security rules
+1. Make "Send to Lanes" fully functional end-to-end.
+2. Deeper NoteLab2 ↔ lanes shared formats and visual language.
+3. camOS Music workspace drives what appears on camleinad.
+4. Keep the canonical SYSTEM_MAP in NoteLab2 updated on every architecture change.
 
-- Never commit `.env` or real secrets.
-- Public repos only contain public/anon config.
-- camOS stays single-owner behind Owner Lock.
-
-## What this pass did (2026-11-24)
-
-- Created this System Map.
-- Expanded lanes README to show its place in the collective.
-- Documented next integration priorities.
-
-## Next priorities
-
-1. Un-archive or replace `camleinad-public` so the public face can receive updates again.
-2. Concrete hand-off path: lanes project / stems / MIDI / mix → camOS release pipeline → camleinad.
-3. camOS Music workspace able to control what is live on the public site.
-4. Shared brand / OG tokens where public + desk both need them.
-5. Any remaining “Send to Lanes” style deep links from other tools.
-
-Update this file on every meaningful change to roles or integration points.
+See the full document in NoteLab2 for security rules, Supabase notes, and detailed status.
