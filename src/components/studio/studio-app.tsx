@@ -1,6 +1,6 @@
 import { AlertTriangle, X } from "lucide-react";
 import LZString from "lz-string";
-import { use } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { getController } from "@/lib/daw/controller";
@@ -64,7 +64,6 @@ export function StudioApp() {
   const openMidiBytes = useCallback(
     async (bytes: Uint8Array, name: string) => {
       const { project } = parseMidiToProject(bytes, name);
-      // Persist through the same path as a new project so autosave + project list work.
       await controller.newBlankProject();
       controller.store.commit(() => project);
       controller.store.markSaved(Date.now());
@@ -104,7 +103,6 @@ export function StudioApp() {
           await initialization;
           if (cancelled) return false;
 
-          // Preferred path: full Standard MIDI File (same as NoteLab download).
           if (typeof payload.midiBase64 === "string" && payload.midiBase64.length > 0) {
             const bytes = base64ToUint8Array(payload.midiBase64);
             await openMidiBytes(bytes, payload.name || "NoteLab.mid");
@@ -114,7 +112,6 @@ export function StudioApp() {
             return true;
           }
 
-          // Legacy path: compressed note events.
           if (!Number.isFinite(payload.bpm) || !payload.bpm || payload.bpm <= 0 || !payload.tracks) {
             throw new Error("Invalid NoteLab MIDI payload (need midiBase64 or bpm+tracks)");
           }
@@ -238,7 +235,6 @@ export function StudioApp() {
       const first = list[0];
       if (!first) return;
 
-      // MIDI files → open as MIDI project (or add could be future work).
       if (isMidiFileName(first.name) || first.type === "audio/midi" || first.type === "audio/mid") {
         void first.arrayBuffer().then((buf) => openMidiBytes(new Uint8Array(buf), first.name));
         return;
