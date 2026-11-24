@@ -1,10 +1,11 @@
 import { AlertTriangle, X } from "lucide-react";
 import LZString from "lz-string";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { use } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { getController } from "@/lib/daw/controller";
 import { newId } from "@/lib/daw/ids";
+import { isMidiFileName, parseMidiToProject } from "@/lib/daw/midi-import";
 import * as ops from "@/lib/daw/ops";
 import { projectEnd } from "@/lib/daw/timeline-math";
 import { takeForStudio } from "@/lib/editor/handoff";
@@ -30,7 +31,6 @@ const NOTELAB_ORIGINS = new Set([
 
 function isAllowedNoteLabOrigin(origin: string): boolean {
   if (NOTELAB_ORIGINS.has(origin)) return true;
-  // Allow any *.uwon.workers.dev worker that looks like a NoteLab deploy.
   try {
     const url = new URL(origin);
     return (
@@ -41,6 +41,13 @@ function isAllowedNoteLabOrigin(origin: string): boolean {
   } catch {
     return false;
   }
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
 }
 
 export function StudioApp() {
@@ -54,6 +61,17 @@ export function StudioApp() {
   const dragDepth = useRef(0);
   const midiImportStarted = useRef(false);
 
+  const openMidiBytes = useCallback(
+    async (bytes: Uint8Array, name: string) => {
+      const { project } = parseMidiToProject(bytes, name);
+      // Persist through the same path as a new project so autosave + project list work.
+      await controller.newBlankProject();
+      controller.store.commit(() => project);
+      controller.store.markSaved(Date.now());
+    },
+    [controller],
+  );
+
   useEffect(() => {
     let cancelled = false;
     let messageHandler: ((event: MessageEvent) => void) | null = null;
@@ -66,39 +84,57 @@ export function StudioApp() {
       const importPayload = async (encodedPayload: string): Promise<boolean> => {
         try {
           const json = LZString.decompressFromEncodedURIComponent(encodedPayload);
-          if (json === null) throw new Error("Invalid compressed NoteLab MIDI payload");
+          if (json === null) throw new Error("Invalid compressed NoteLab payload");
           let payload: {
-            bpm: number;
-            tracks: Partial<Record<"melody" | "chords" | "bass" | "drums", { s: number; l: number; p: number; v: number }[]>>;
+            kind?: string;
+            name?: string;
+            bpm?: number;
+            midiBase64?: string;
+            tracks?: Partial<
+              Record<"melody" | "chords" | "bass" | "drums", { s: number; l: number; p: number; v: number }[]>
+            >;
           };
           try {
             payload = JSON.parse(json) as typeof payload;
           } catch (error) {
-            console.error("NoteLab sent invalid MIDI JSON:", error);
+            console.error("NoteLab sent invalid JSON:", error);
             return false;
-          }
-          if (!Number.isFinite(payload.bpm) || payload.bpm <= 0 || !payload.tracks || typeof payload.tracks !== "object") {
-            throw new Error("Invalid NoteLab MIDI payload");
           }
 
           await initialization;
           if (cancelled) return false;
+
+          // Preferred path: full Standard MIDI File (same as NoteLab download).
+          if (typeof payload.midiBase64 === "string" && payload.midiBase64.length > 0) {
+            const bytes = base64ToUint8Array(payload.midiBase64);
+            await openMidiBytes(bytes, payload.name || "NoteLab.mid");
+            midiImportStarted.current = true;
+            setWaitingForNoteLab(false);
+            window.history.replaceState({}, "", "/");
+            return true;
+          }
+
+          // Legacy path: compressed note events.
+          if (!Number.isFinite(payload.bpm) || !payload.bpm || payload.bpm <= 0 || !payload.tracks) {
+            throw new Error("Invalid NoteLab MIDI payload (need midiBase64 or bpm+tracks)");
+          }
+
           if (controller.store.getState().project === null) await controller.newBlankProject();
-          controller.store.commit((project) => ops.setBpm(project, payload.bpm));
+          controller.store.commit((project) => ops.setBpm(project, payload.bpm!));
           const activeProject = controller.store.getState().project;
           if (!activeProject) throw new Error("Could not open a project for NoteLab MIDI import");
           let project = activeProject;
           const parts = [
-            { key: "melody", name: "Melody", synth: "keys" as const, color: "var(--lane-vocals)" },
-            { key: "chords", name: "Chords", synth: "keys" as const, color: "var(--lane-chords)" },
-            { key: "bass", name: "Bass", synth: "bass" as const, color: "var(--lane-bass)" },
-            { key: "drums", name: "Drums", synth: "drums" as const, color: "var(--lane-kick)" },
-          ] as const;
+            { key: "melody" as const, name: "Melody", synth: "keys" as const, color: "var(--lane-vocals)" },
+            { key: "chords" as const, name: "Chords", synth: "keys" as const, color: "var(--lane-chords)" },
+            { key: "bass" as const, name: "Bass", synth: "bass" as const, color: "var(--lane-bass)" },
+            { key: "drums" as const, name: "Drums", synth: "drums" as const, color: "var(--lane-kick)" },
+          ];
           const secondsPerBar = 240 / payload.bpm;
 
           for (const part of parts) {
             const notes = payload.tracks[part.key];
-            if (!Array.isArray(notes)) continue;
+            if (!Array.isArray(notes) || !notes.length) continue;
             const added = ops.addTrack(project, { name: part.name, kind: "midi", color: part.color });
             const trackId = added.ids[0]!;
             project = {
@@ -110,10 +146,18 @@ export function StudioApp() {
                       ...track,
                       synth: part.synth,
                       clips: notes
-                        .filter((note) =>
-                          Number.isFinite(note.s) && note.s >= 0 && Number.isFinite(note.l) && note.l > 0 &&
-                          Number.isFinite(note.p) && note.p >= 0 && note.p <= 127 &&
-                          Number.isFinite(note.v) && note.v >= 0 && note.v <= 127,
+                        .filter(
+                          (note) =>
+                            Number.isFinite(note.s) &&
+                            note.s >= 0 &&
+                            Number.isFinite(note.l) &&
+                            note.l > 0 &&
+                            Number.isFinite(note.p) &&
+                            note.p >= 0 &&
+                            note.p <= 127 &&
+                            Number.isFinite(note.v) &&
+                            note.v >= 0 &&
+                            note.v <= 127,
                         )
                         .map((note) => ({
                           kind: "event" as const,
@@ -121,7 +165,7 @@ export function StudioApp() {
                           trackId,
                           name: part.name,
                           start: (note.s / 16) * secondsPerBar,
-                          duration: (note.l / 16) * secondsPerBar,
+                          duration: Math.max(0.03, (note.l / 16) * secondsPerBar),
                           pitch: note.p,
                           velocity: note.v / 127,
                         })),
@@ -137,6 +181,7 @@ export function StudioApp() {
           return true;
         } catch (error) {
           console.error("Could not import NoteLab MIDI:", error);
+          setWaitingForNoteLab(false);
           return false;
         }
       };
@@ -167,9 +212,8 @@ export function StudioApp() {
       cancelled = true;
       if (messageHandler) window.removeEventListener("message", messageHandler);
     };
-  }, [controller]);
+  }, [controller, openMidiBytes]);
 
-  // Leaving for the editor unmounts the studio; don't leave it playing underneath.
   useEffect(
     () => () => {
       if (controller.engine.playing) controller.engine.pause();
@@ -177,7 +221,6 @@ export function StudioApp() {
     [controller],
   );
 
-  // Audio sent over from the AudioMass editor ("Analyse in Studio" / "Add as track").
   useEffect(() => {
     if (!cs.ready) return;
     const incoming = takeForStudio();
@@ -194,10 +237,17 @@ export function StudioApp() {
       const list = Array.from(files);
       const first = list[0];
       if (!first) return;
+
+      // MIDI files → open as MIDI project (or add could be future work).
+      if (isMidiFileName(first.name) || first.type === "audio/midi" || first.type === "audio/mid") {
+        void first.arrayBuffer().then((buf) => openMidiBytes(new Uint8Array(buf), first.name));
+        return;
+      }
+
       if (controller.store.getState().project) void controller.addAudioFile(first, controller.engine.currentTime());
       else void controller.importFile(first);
     },
-    [controller],
+    [controller, openMidiBytes],
   );
 
   const togglePlay = useCallback(async () => {
@@ -232,7 +282,7 @@ export function StudioApp() {
       {children}
       {dragging ? (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-2 border-dashed border-primary bg-background/80 text-sm text-foreground">
-          Drop audio to {project ? "add it as a track" : "analyse it"}
+          Drop audio or MIDI (.mid) to {project ? "add / open it" : "open it in the studio"}
         </div>
       ) : null}
       <ProjectsDialog controller={controller} open={dialog} onClose={() => setDialog(false)} />
@@ -241,8 +291,12 @@ export function StudioApp() {
 
   if (waitingForNoteLab) {
     return (
-      <div className="flex min-h-[calc(100dvh-var(--shell-h))] items-center justify-center bg-background text-sm text-muted-foreground" role="status" aria-live="polite">
-        Waiting for NoteLab connection…
+      <div
+        className="flex min-h-[calc(100dvh-var(--shell-h))] items-center justify-center bg-background text-sm text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
+        Waiting for NoteLab MIDI…
       </div>
     );
   }
@@ -299,7 +353,7 @@ export function StudioApp() {
         {banners}
         <IdleScreen
           busy={busy}
-          onFiles={(f) => void controller.importFile(Array.from(f)[0]!)}
+          onFiles={(f) => onFiles(f)}
           onDemo={() => void controller.loadDemo()}
           onBlank={() => void controller.newBlankProject()}
           onOpenProjects={() => setDialog(true)}
@@ -347,7 +401,13 @@ export function StudioApp() {
 
 function Banner({ tone, text, onClose }: { tone: "error" | "info"; text: string; onClose?: () => void }) {
   return (
-    <div role={tone === "error" ? "alert" : "status"} className={"flex items-center gap-3 border-b border-border px-4 py-2 text-xs " + (tone === "error" ? "bg-destructive/10 text-foreground" : "bg-card text-muted-foreground")}>
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      className={
+        "flex items-center gap-3 border-b border-border px-4 py-2 text-xs " +
+        (tone === "error" ? "bg-destructive/10 text-foreground" : "bg-card text-muted-foreground")
+      }
+    >
       {tone === "error" ? <AlertTriangle className="size-4 shrink-0 text-destructive" /> : null}
       <span className="flex-1">{text}</span>
       {onClose ? (
