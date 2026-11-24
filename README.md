@@ -19,7 +19,10 @@ Part of the **CAM ecosystem** (4 repos).
 | [camleinad](https://github.com/Classic4440/camleinad) | Public artist website |
 | [camOS](https://github.com/Classic4440/camOS) | Private owner desk |
 
-Canonical system map (data flows, status, priorities):
+**Developer entry point for the whole system:**  
+→ [camOS README](https://github.com/Classic4440/camOS/blob/main/README.md)
+
+Canonical architecture map:  
 → https://github.com/Classic4440/NoteLab2/blob/main/docs/SYSTEM_MAP.md
 
 Local mirror → **[docs/SYSTEM_MAP.md](docs/SYSTEM_MAP.md)**
@@ -79,6 +82,6 @@ node --experimental-strip-types scripts/analyze-file.ts song.mp3
 
 ## Changelog (2026-11-24)
 
-- Corrected SYSTEM_MAP to the real 4-repo set (NoteLab2, lanes, camleinad, camOS)
+- Pointed developers to camOS README as the main ecosystem entry point
+- Corrected SYSTEM_MAP to the real 4-repo set
 - Explicitly marked `camleinad-public` as archived / wrong target
-- Pointed to canonical System Map in NoteLab2
