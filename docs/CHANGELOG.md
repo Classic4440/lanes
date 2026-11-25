@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-25 — shadcn missing dep
+- Added **`class-variance-authority@^0.7.1`** (used by `src/components/ui/button.tsx` and `badge.tsx`).
+- Verified already present: `clsx`, `tailwind-merge`, `@radix-ui/*`, `lucide-react`, `sonner`, `cmdk`, `vaul`.
+
 ## 2026-11-25 — TanStack Start + Vite 8 + Nitro (build unblock)
 - **Added** `@tanstack/react-start@^1.169.7` (was missing → `Cannot find package '@tanstack/react-start'`).
 - Bumped `@tanstack/react-router` → `^1.170.46`.
