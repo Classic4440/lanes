@@ -28,17 +28,21 @@ camOS Music workspace (manage release)
 camleinad (public artist site)
 ```
 
-## Dependency notes (2026-11-25)
+## Handshake environment variables (required)
 
-- All `@radix-ui/*` ranges in this repo are pinned to **published** npm versions (fixes Cloudflare `ETARGET`).
-- `lz-string` is a required dependency for the NoteLab handshake.
-- Vite stays on 7.x; React on 19.x. Nitro remains for the Cloudflare/Nitro build path in `vite.config.ts`.
+Set these in Cloudflare (and local `.env`) or the postMessage origin check fails.
 
-## Next Priorities
+| App | Variable | Value |
+|-----|----------|--------|
+| NoteLab2 | `VITE_LANES_URL` | `https://lanes.uwon.workers.dev` |
+| lanes | `VITE_NOTELAB_URL` | `https://notelab2.uwon.workers.dev` |
 
-1. Confirm Cloudflare deploy after the radix pin lands.
-2. Deeper NoteLab2 ↔ lanes shared formats and visual language.
-3. camOS Music workspace drives what appears on camleinad.
-4. Keep the canonical SYSTEM_MAP in NoteLab2 updated on every architecture change.
+Worker name in Nitro (`vite.config.ts` → `cloudflare.wrangler.name`) is **`lanes`**.
 
-See the full document in NoteLab2 for security rules, Supabase notes, and detailed status.
+## Status (2026-11-25)
+
+- Send to Lanes MIDI handshake verified live on mobile (all tracks).
+- Vite 8 + TanStack Start 1.169 + Nitro RC build path is the current lanes stack.
+- `lz-string` is required for the NoteLab payload.
+
+See the full document in NoteLab2 for security rules and Supabase notes.
