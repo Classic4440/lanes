@@ -1,6 +1,6 @@
 # CAM Ecosystem — System Map
 
-**Last updated:** 2026-11-24  
+**Last updated:** 2026-11-25  
 **Canonical copy lives in NoteLab2:** https://github.com/Classic4440/NoteLab2/blob/main/docs/SYSTEM_MAP.md
 
 This is a mirror for convenience inside the lanes repo.
@@ -20,7 +20,7 @@ This is a mirror for convenience inside the lanes repo.
 
 ```
 NoteLab2 (create / learn / generate)
-    ↓  "Send to Lanes"
+    ↓  "Send to Lanes" (postMessage + lz-string; SMF preferred)
 lanes (analyse / edit / stems / MIDI / bounce)
     ↓  hand-off
 camOS Music workspace (manage release)
@@ -28,9 +28,15 @@ camOS Music workspace (manage release)
 camleinad (public artist site)
 ```
 
+## Dependency notes (2026-11-25)
+
+- All `@radix-ui/*` ranges in this repo are pinned to **published** npm versions (fixes Cloudflare `ETARGET`).
+- `lz-string` is a required dependency for the NoteLab handshake.
+- Vite stays on 7.x; React on 19.x. Nitro remains for the Cloudflare/Nitro build path in `vite.config.ts`.
+
 ## Next Priorities
 
-1. Make "Send to Lanes" fully functional end-to-end.
+1. Confirm Cloudflare deploy after the radix pin lands.
 2. Deeper NoteLab2 ↔ lanes shared formats and visual language.
 3. camOS Music workspace drives what appears on camleinad.
 4. Keep the canonical SYSTEM_MAP in NoteLab2 updated on every architecture change.
