@@ -18,8 +18,8 @@ import { Timeline } from "./timeline";
 import { Transport } from "./transport";
 import { useControllerState, usePlayhead, useProjectState } from "./use-studio";
 
-/** Origins allowed to complete the NoteLab → Lanes postMessage handshake. */
-const NOTELAB_ORIGINS = new Set([
+/** Built-in origins always allowed for the NoteLab → Lanes postMessage handshake. */
+const BUILTIN_NOTELAB_ORIGINS = [
   "https://notelab2.uwon.workers.dev",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
@@ -27,7 +27,38 @@ const NOTELAB_ORIGINS = new Set([
   "http://127.0.0.1:4173",
   "http://localhost:8080",
   "http://127.0.0.1:8080",
-]);
+];
+
+function readEnvNoteLabOrigins(): string[] {
+  const extra: string[] = [];
+  try {
+    const env =
+      typeof import.meta !== "undefined"
+        ? ((import.meta as ImportMeta & { env?: Record<string, string> }).env ?? {})
+        : {};
+    const single = (env.VITE_NOTELAB_URL || "").trim();
+    if (single) {
+      try {
+        extra.push(new URL(single.includes("://") ? single : `https://${single}`).origin);
+      } catch {
+        /* ignore bad env */
+      }
+    }
+    const list = (env.VITE_NOTELAB_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+    for (const item of list) {
+      try {
+        extra.push(new URL(item.includes("://") ? item : `https://${item}`).origin);
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* SSR / non-vite */
+  }
+  return extra;
+}
+
+const NOTELAB_ORIGINS = new Set([...BUILTIN_NOTELAB_ORIGINS, ...readEnvNoteLabOrigins()]);
 
 function isAllowedNoteLabOrigin(origin: string): boolean {
   if (NOTELAB_ORIGINS.has(origin)) return true;
